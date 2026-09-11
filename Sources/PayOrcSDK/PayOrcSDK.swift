@@ -12,4 +12,4 @@
 // MARK: - SDK Version
 
 /// The current PayOrc iOS SDK version string.
-public let PayOrcSDKVersion = "2.0.0"
+public let PayOrcSDKVersion = "1.0.0"

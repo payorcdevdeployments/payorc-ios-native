@@ -24,13 +24,13 @@ https://github.com/payorcdevdeployments/payorc-ios-native.git
 
 1. *File → Add Package Dependencies…*
 2. Paste the URL above.
-3. Choose a version rule (e.g. *Up to Next Major* from `2.0.0`) and add the **`PayOrcSDK`** library product to your app target.
+3. Choose a version rule (e.g. *Up to Next Major* from `1.0.0`) and add the **`PayOrcSDK`** library product to your app target.
 
 ### `Package.swift`
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/payorcdevdeployments/payorc-ios-native.git", from: "2.0.0")
+    .package(url: "https://github.com/payorcdevdeployments/payorc-ios-native.git", from: "1.0.0")
 ],
 targets: [
     .target(
@@ -48,7 +48,7 @@ targets: [
 import PayOrcSDK
 ```
 
-Everything public — `PayOrc`, `PaymentRequest`, `PayOrcSDKCustomization`, the embedded views — is namespaced under that module. `PayOrcSDKVersion` (currently `"2.0.0"`) is exposed for logging; keep it in sync with the git tag when releasing.
+Everything public — `PayOrc`, `PaymentRequest`, `PayOrcSDKCustomization`, the embedded views — is namespaced under that module. `PayOrcSDKVersion` (currently `"1.0.0"`) is exposed for logging; keep it in sync with the git tag when releasing.
 
 ## App setup
 
@@ -634,7 +634,7 @@ xcodebuild -scheme PayOrcSDK -destination 'generic/platform=iOS' build
 ## Releasing
 
 1. Bump `PayOrcSDKVersion` in `Sources/PayOrcSDK/PayOrcSDK.swift`.
-2. Commit, then tag: `git tag 2.0.1 && git push origin 2.0.1`.
+2. Commit, then tag: `git tag 1.0.1 && git push origin 1.0.1`.
 3. Consumers pick it up via their version rule.
 
 ---
