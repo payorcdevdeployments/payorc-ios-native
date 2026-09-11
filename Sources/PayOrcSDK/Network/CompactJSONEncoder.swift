@@ -2,14 +2,23 @@ import Foundation
 
 // MARK: - CompactJSONEncoder
 
-/// Produces deterministic, compact JSON exactly matching JavaScript's JSON.stringify output.
+/// Produces deterministic, compact JSON matching JavaScript's `JSON.stringify`
+/// (and Dart's `jsonEncode`) output.
 ///
-/// Critical for PayOrc request signing, which requires byte-for-byte matching of:
-/// - JSON key ordering (alphabetical)
-/// - Number formatting (no decimals on whole numbers)
+/// Critical for PayOrc request signing: the gateway re-parses the received body
+/// and re-serialises it with `JSON.stringify(req.body)` before validating the
+/// HMAC, so the bytes we sign must already be in that canonical form:
 /// - No whitespace (compact form)
+/// - Number formatting (no decimals on whole numbers) — see ``JSNormalizer``
+/// - **Forward slashes NOT escaped** (`/`, never `\/`)
 ///
-/// This ensures the signed body matches what the gateway validates.
+/// `JSONSerialization` always escapes `/` as `\/` and offers no option to stop it,
+/// so ``removingSlashEscapes(_:)`` strips that escaping back out. Without this the
+/// signed body differs from the gateway's normalised body wherever a value
+/// contains a slash (e.g. `urls.webhook_url`, or base64 `/` in an Apple Pay
+/// token), producing `401 E0021 "Invalid request signature"`. This is the same
+/// reason `sdk/payment` and `sdk/add-card` build their bodies with ``OrderedJSON``
+/// instead of this encoder.
 struct CompactJSONEncoder {
 
     // MARK: - Encoding
@@ -17,22 +26,48 @@ struct CompactJSONEncoder {
     /// Encodes a dictionary to compact JSON bytes suitable for signing.
     ///
     /// - Parameters:
-    ///   - dictionary: The data to encode. Key order is preserved to match JavaScript's
-    ///     `JSON.stringify` output for deterministic signing.
-    /// - Returns: UTF-8 bytes of compact JSON
+    ///   - dictionary: The data to encode.
+    /// - Returns: UTF-8 bytes of compact JSON, with forward slashes left unescaped.
     /// - Throws: Encoding errors if data cannot be serialized
     static func encodeCompact(_ dictionary: [String: Any]) throws -> Data {
-        // .sortedKeys ensures alphabetical key ordering — critical for HMAC signing
-        // because the gateway hashes a specific byte sequence. Without sorted keys,
-        // Swift dictionaries produce non-deterministic ordering across runs,
-        // causing the signed body to differ from the sent body.
-        // Flutter's jsonEncode also produces sorted keys via Dart's LinkedHashMap
-        // which preserves insertion order — but the gateway validates sorted-key JSON.
+        // .sortedKeys keeps output deterministic across runs. Ordering itself does
+        // not matter for the signature (the gateway re-serialises in the order it
+        // parsed, i.e. the order we send), but the signed bytes and the sent bytes
+        // must be identical — which they are, since both come from this call.
         let data = try JSONSerialization.data(
             withJSONObject: dictionary,
             options: [.sortedKeys]
         )
-        return data
+        guard let json = String(data: data, encoding: .utf8) else { return data }
+        return Data(removingSlashEscapes(json).utf8)
+    }
+
+    /// Removes `\/` escaping from a JSON string produced by `JSONSerialization`,
+    /// leaving every other escape sequence (`\"`, `\\`, `\n`, `\uXXXX`, …) intact.
+    ///
+    /// Walks the string tracking backslash state so `"\\/"` (a literal backslash
+    /// followed by a slash) is preserved rather than corrupted.
+    static func removingSlashEscapes(_ json: String) -> String {
+        var out = String()
+        out.reserveCapacity(json.count)
+        var pendingBackslash = false
+        for ch in json {
+            if pendingBackslash {
+                if ch == "/" {
+                    out.append("/")          // drop the escaping backslash
+                } else {
+                    out.append("\\")
+                    out.append(ch)
+                }
+                pendingBackslash = false
+            } else if ch == "\\" {
+                pendingBackslash = true
+            } else {
+                out.append(ch)
+            }
+        }
+        if pendingBackslash { out.append("\\") }
+        return out
     }
 
     /// Encodes and returns the compact JSON as a string for inspection.
